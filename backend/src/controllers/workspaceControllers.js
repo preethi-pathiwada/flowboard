@@ -44,6 +44,37 @@ exports.getUserWorkspaces = async (req, res) => {
 }
 
 exports.addMembers = async (req, res) => {
+    const {workspaceId} = req.params
+    const {email} = req.body
 
+    try{
+        const getUserId = await pool.query(`
+            SELECT id from users WHERE users.email = $1`, [email]
+        )
+        if (getUserId.rows.length===0){
+            return res.status(404).json({message:"User Not Found"})
+        }
+        else{
+            const isMemberExist = await pool.query(`
+                    SELECT * FROM workspace_members WHERE user_id = $1 and workspace_id = $2
+                `, [getUserId.rows[0].id, workspaceId])
+
+            if (isMemberExist.rows.length===0){
+                await pool.query(`
+                        INSERT INTO workspace_members(workspace_id, user_id, role) 
+                        VALUES($1, $2, $3) RETURNING *
+                    `,[workspaceId,getUserId.rows[0].id, "member" ])
+                return res.status(201).json({message:"Member added"})
+            }
+            else{
+                return res.status(400).json({message:"Member already exists"})
+            }
+        }
+        
+    }
+    catch(err){
+        console.log(err)
+        res.status(500).send("Server Error")
+    }
 }
 
