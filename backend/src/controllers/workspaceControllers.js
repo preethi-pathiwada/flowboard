@@ -46,29 +46,42 @@ exports.getUserWorkspaces = async (req, res) => {
 exports.addMembers = async (req, res) => {
     const {workspaceId} = req.params
     const {email} = req.body
+    const userId = req.user.id
 
     try{
-        const getUserId = await pool.query(`
+        const ownerCheck = await pool.query(`
+                SELECT role from workspace_members 
+                WHERE workspace_id = $1 and user_id = $2
+            `, [workspaceId, userId])
+        
+        if (ownerCheck.rows[0].role==="owner"){
+            const getMemberId = await pool.query(`
             SELECT id from users WHERE users.email = $1`, [email]
         )
-        if (getUserId.rows.length===0){
+             if (getMemberId.rows.length===0){
             return res.status(404).json({message:"User Not Found"})
         }
-        else{
-            const isMemberExist = await pool.query(`
-                    SELECT * FROM workspace_members WHERE user_id = $1 and workspace_id = $2
-                `, [getUserId.rows[0].id, workspaceId])
-
-            if (isMemberExist.rows.length===0){
-                await pool.query(`
-                        INSERT INTO workspace_members(workspace_id, user_id, role) 
-                        VALUES($1, $2, $3) RETURNING *
-                    `,[workspaceId,getUserId.rows[0].id, "member" ])
-                return res.status(201).json({message:"Member added"})
-            }
+        
             else{
-                return res.status(400).json({message:"Member already exists"})
+                const isMemberExist = await pool.query(`
+                        SELECT * FROM workspace_members WHERE user_id = $1 and workspace_id = $2
+                    `, [getMemberId.rows[0].id, workspaceId])
+
+                if (isMemberExist.rows.length===0){
+                    await pool.query(`
+                            INSERT INTO workspace_members(workspace_id, user_id, role) 
+                            VALUES($1, $2, $3) RETURNING *
+                        `,[workspaceId,getMemberId.rows[0].id, "member" ])
+                    return res.status(201).json({message:"Member added"})
+                }
+                else{
+                    return res.status(400).json({message:"Member already exists"})
+                }
             }
+        }
+
+        else{
+            return res.status(401).json({message:"Only owner can add the members"})
         }
         
     }
@@ -77,4 +90,3 @@ exports.addMembers = async (req, res) => {
         res.status(500).send("Server Error")
     }
 }
-

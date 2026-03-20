@@ -8,17 +8,29 @@ exports.registerUser = async (req, res) => {
     const {name, email, password} = req.body
     const hashedPassword = await bcrypt.hash(password, 10)
     try {
-         const userExists = await pool.query("SELECT * FROM users where email = $1", [email])
-    if(userExists.rows.length>0){
-        res.status(409).send("Duplicate Entry")
-    }
-    else{
-        const createUser = await pool.query("INSERT INTO users(name, email, password) VALUES($1, $2, $3) RETURNING *", [name, email, hashedPassword])
-        res.status(201).json({
-            message:"User created successfully",
-            user:createUser.rows[0]
-        })
-    }
+        let message = "";
+        let passwordArr = password.split("")
+        if (password.length<8){
+            return res.status(401).json({message:"Password should be atleast 8 characters"})
+        }
+        const hasAlpha = passwordArr.some(char => (char>='a' && char<='z') || (char>='A' & char<='Z'))
+        const hasNumber = passwordArr.some(char => char>='0' && char<='9')
+        const hasSpecialChar = passwordArr.some(char => !((char>='a' && char<='z') || (char>='A' & char<='Z') || (char>='0' && char<='9')))
+
+        if (!hasAlpha || !hasNumber || !hasSpecialChar){
+            return res.status(401).json({message:"Password should include an alphabet, a number and a special character"})
+        }
+        const userExists = await pool.query("SELECT * FROM users where email = $1", [email])
+        if(userExists.rows.length>0){
+            return res.status(409).send("Duplicate Entry")
+        }
+        else{
+            const createUser = await pool.query("INSERT INTO users(name, email, password) VALUES($1, $2, $3) RETURNING *", [name, email, hashedPassword])
+            return res.status(201).json({
+                message:"User created successfully",
+                user:createUser.rows[0]
+            })
+        }
     } catch (error) {
         console.log(error)
         res.status(500).send("Server Error")
